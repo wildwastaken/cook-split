@@ -1,5 +1,5 @@
-/** Built-in sample recipes (original text). */
-export const SAMPLE_RECIPES = [
+/** Recipes used by the merge tests (original text). */
+export const FIXTURE_RECIPES = [
   {
     title: 'Weeknight Garlic Tomato Pasta',
     servings: 4,

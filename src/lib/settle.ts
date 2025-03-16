@@ -9,10 +9,32 @@ export interface Person {
   paid: number;
 }
 
+/** Something bought on the shared trip that only the buyer pays for (rice they keep, etc.). */
+export interface PersonalItem {
+  id: string;
+  name: string;
+  /** Dollars. */
+  cost: number;
+  /** Person id of whoever bought it ('' = not picked yet, so it isn't deducted). */
+  by: string;
+  /** Grocery item key when it was marked from the grocery list. */
+  key?: string;
+}
+
+/** Cents of not-split items per buyer. */
+export function personalCentsBy(items: PersonalItem[]): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const it of items) if (it.by) m.set(it.by, (m.get(it.by) ?? 0) + toCents(it.cost));
+  return m;
+}
+
 export interface Balance {
   id: string;
   name: string;
+  /** What they paid toward the shared groceries (receipt minus their not-split items). */
   paidCents: number;
+  /** Their not-split items, already taken out of paidCents. */
+  personalCents: number;
   shareCents: number;
   /** positive = is owed money, negative = owes money */
   netCents: number;
@@ -30,11 +52,13 @@ export const toCents = (dollars: number): number =>
 /**
  * Even split among attendees. Leftover cents (total not divisible by headcount)
  * go one each to the first attendees in list order, so shares sum exactly to the total.
- * Non-attendees who paid get fully reimbursed.
+ * Non-attendees who paid get fully reimbursed. Not-split items come off the buyer's receipt first.
  */
-export function computeBalances(people: Person[]): Balance[] {
+export function computeBalances(people: Person[], personal: PersonalItem[] = []): Balance[] {
+  const mine = personalCentsBy(personal);
+  const sharedPaid = (p: Person) => Math.max(0, toCents(p.paid) - (mine.get(p.id) ?? 0));
   const attendees = people.filter((p) => p.attended);
-  const totalCents = people.reduce((s, p) => s + toCents(p.paid), 0);
+  const totalCents = people.reduce((s, p) => s + sharedPaid(p), 0);
   const n = attendees.length;
   const baseShare = n ? Math.floor(totalCents / n) : 0;
   let remainder = n ? totalCents - baseShare * n : 0;
@@ -47,8 +71,9 @@ export function computeBalances(people: Person[]): Balance[] {
         remainder--;
       }
     }
-    const paid = toCents(p.paid);
-    return { id: p.id, name: p.name, paidCents: paid, shareCents: share, netCents: n ? paid - share : 0 };
+    const paid = sharedPaid(p);
+    const personalCents = Math.min(toCents(p.paid), mine.get(p.id) ?? 0);
+    return { id: p.id, name: p.name, paidCents: paid, personalCents, shareCents: share, netCents: n ? paid - share : 0 };
   });
 }
 

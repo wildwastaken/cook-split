@@ -1,7 +1,7 @@
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string';
 import type { Recipe } from './merge';
-import type { Person } from './settle';
-import { SAMPLE_RECIPES } from '../samples';
+import type { Person, PersonalItem } from './settle';
+import { PAST_RECIPES } from './library';
 
 export interface DinnerState {
   v: 1;
@@ -9,6 +9,8 @@ export interface DinnerState {
   headcount: number;
   recipes: Recipe[];
   people: Person[];
+  /** Bought on the trip but paid for only by the buyer. */
+  personal: PersonalItem[];
   /** Grocery item keys checked off while shopping. */
   checked: string[];
 }
@@ -17,15 +19,19 @@ export const STORAGE_KEY = 'cook-split:v1';
 
 export const uid = (): string => Math.random().toString(36).slice(2, 10);
 
+const STARTERS = ['Chicken Alfredo', 'Butter Chicken'];
+
 export function defaultState(): DinnerState {
   return {
     v: 1,
     dinnerName: 'Friday dinner',
     headcount: 6,
-    recipes: SAMPLE_RECIPES.map((r, i) => ({ ...r, id: uid(), selected: i < 2 })),
+    recipes: PAST_RECIPES.filter((r) => STARTERS.includes(r.title)).map((r) => ({ ...r, id: uid(), selected: true })),
+    personal: [],
     people: [
-      { id: uid(), name: 'Allen', venmo: '', attended: true, paid: 0 },
-      { id: uid(), name: '', venmo: '', attended: true, paid: 0 },
+      { id: uid(), name: 'Allen', venmo: 'allenlovesjesus', attended: true, paid: 0 },
+      { id: uid(), name: 'Justin', venmo: 'suppear', attended: true, paid: 0 },
+      { id: uid(), name: 'Elijah', venmo: 'ejpatts', attended: true, paid: 0 },
     ],
     checked: [],
   };
@@ -57,6 +63,15 @@ export function sanitize(input: unknown): DinnerState | null {
       attended: p?.attended !== false,
       paid: Math.max(0, num(p?.paid, 0)),
     })),
+    personal: Array.isArray(o.personal)
+      ? o.personal.slice(0, 100).map((it: Record<string, unknown>) => ({
+          id: str(it?.id) || uid(),
+          name: str(it?.name).slice(0, 120),
+          cost: Math.max(0, num(it?.cost, 0)),
+          by: str(it?.by).slice(0, 40),
+          ...(typeof it?.key === 'string' ? { key: it.key.slice(0, 200) } : {}),
+        }))
+      : [],
     checked: Array.isArray(o.checked) ? o.checked.filter((c): c is string => typeof c === 'string') : [],
   };
 }

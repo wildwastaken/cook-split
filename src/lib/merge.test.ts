@@ -4,7 +4,7 @@ import { normalizeName, singularize } from './normalize';
 import { parseIngredientLine } from './parse';
 import { sectionFor } from './sections';
 import { formatQty, roundUp, toShopperAmount, UNITS } from './units';
-import { SAMPLE_RECIPES } from '../samples';
+import { FIXTURE_RECIPES } from './fixtures';
 
 const line = (text: string, factor = 1, recipeTitle = 'R') => ({
   recipeTitle,
@@ -143,7 +143,7 @@ describe('sections', () => {
 });
 
 describe('buildGroceryList', () => {
-  const recipes: Recipe[] = SAMPLE_RECIPES.map((r, i) => ({ ...r, id: String(i), selected: true }));
+  const recipes: Recipe[] = FIXTURE_RECIPES.map((r, i) => ({ ...r, id: String(i), selected: true }));
 
   it('scale factor is headcount / servings', () => {
     expect(scaleFactor(4, 8)).toBe(2);

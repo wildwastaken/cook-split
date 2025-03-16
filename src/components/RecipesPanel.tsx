@@ -3,7 +3,7 @@ import { scaleFactor, type Recipe } from '../lib/merge';
 import { parseIngredients } from '../lib/parse';
 import { formatQty, UNITS, unitLabel } from '../lib/units';
 import { uid } from '../lib/state';
-import { SAMPLE_RECIPES } from '../samples';
+import { fullLibrary, loadSaved, removeSaved, sameTitle, storeSaved, upsertSaved, type LibraryRecipe } from '../lib/library';
 
 interface Props {
   recipes: Recipe[];
@@ -20,9 +20,24 @@ export function RecipesPanel({ recipes, headcount, onChange, onHeadcount, onNext
   };
   const addBlank = () =>
     onChange([...recipes, { id: uid(), title: '', servings: 4, text: '', selected: true }]);
-  const missingSamples = SAMPLE_RECIPES.filter((s) => !recipes.some((r) => r.title === s.title));
-  const addSamples = () =>
-    onChange([...recipes, ...missingSamples.map((s) => ({ ...s, id: uid(), selected: true }))]);
+  const [saved, setSaved] = useState<LibraryRecipe[]>(loadSaved);
+  const [pickerOpen, setPickerOpen] = useState(true);
+  const library = fullLibrary(saved);
+  const updateSaved = (next: LibraryRecipe[]) => {
+    setSaved(next);
+    storeSaved(next);
+  };
+  const inDinner = (title: string) => recipes.find((r) => sameTitle(r.title, title));
+  const pick = (lib: LibraryRecipe) => {
+    const existing = inDinner(lib.title);
+    if (existing) patch(existing.id, { selected: !existing.selected });
+    else onChange([...recipes, { title: lib.title, servings: lib.servings, text: lib.text, id: uid(), selected: true }]);
+  };
+  const saveRecipe = (r: Recipe) => updateSaved(upsertSaved(saved, r));
+  const isSaved = (r: Recipe) => saved.some((s) => sameTitle(s.title, r.title) && s.text === r.text && s.servings === r.servings);
+  const forget = (title: string) => {
+    if (window.confirm(`Remove "${title}" from your past recipes on this device?`)) updateSaved(removeSaved(saved, title));
+  };
 
   const selected = recipes.filter((r) => r.selected).length;
 
@@ -51,23 +66,58 @@ export function RecipesPanel({ recipes, headcount, onChange, onHeadcount, onNext
         </div>
       </div>
 
+      <div className="card library">
+        <button className="library-head" onClick={() => setPickerOpen((v) => !v)} aria-expanded={pickerOpen}>
+          <span>
+            <span className="label">Past recipes</span>
+            <span className="hint">Pick what we're making from things we've cooked before.</span>
+          </span>
+          <span className="label">{pickerOpen ? 'hide' : `${library.length} recipes`}</span>
+        </button>
+        {pickerOpen && (
+          <ul className="chips">
+            {library.map((lib) => {
+              const r = inDinner(lib.title);
+              const on = !!r?.selected;
+              return (
+                <li key={lib.title}>
+                  <button className={`chip ${on ? 'on' : ''}`} onClick={() => pick(lib)} aria-pressed={on}>
+                    <span className="chip-mark" aria-hidden="true">{on ? '✓' : '+'}</span>
+                    {lib.title}
+                    <span className="chip-meta">serves {lib.servings}</span>
+                  </button>
+                  {lib.saved && (
+                    <button className="chip-x" onClick={() => forget(lib.title)} aria-label={`Forget ${lib.title}`} title="Forget">
+                      ×
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
       {recipes.length === 0 && (
         <div className="empty">
-          <p>No recipes yet. Paste one in or start from the samples.</p>
+          <p>No recipes yet. Pick from past recipes or paste one in.</p>
         </div>
       )}
 
       {recipes.map((r) => (
-        <RecipeCard key={r.id} recipe={r} headcount={headcount} onPatch={(p) => patch(r.id, p)} onRemove={() => remove(r)} />
+        <RecipeCard
+          key={r.id}
+          recipe={r}
+          headcount={headcount}
+          onPatch={(p) => patch(r.id, p)}
+          onRemove={() => remove(r)}
+          onSave={() => saveRecipe(r)}
+          saved={isSaved(r)}
+        />
       ))}
 
       <div className="row-actions">
         <button className="btn" onClick={addBlank}>+ Paste a recipe</button>
-        {missingSamples.length > 0 && (
-          <button className="btn ghost" onClick={addSamples}>
-            Add {missingSamples.length} sample{missingSamples.length > 1 ? 's' : ''}
-          </button>
-        )}
         <span className="spacer" />
         <button className="btn primary" onClick={onNext} disabled={selected === 0}>
           Grocery list →
@@ -82,11 +132,15 @@ function RecipeCard({
   headcount,
   onPatch,
   onRemove,
+  onSave,
+  saved,
 }: {
   recipe: Recipe;
   headcount: number;
   onPatch: (p: Partial<Recipe>) => void;
   onRemove: () => void;
+  onSave: () => void;
+  saved: boolean;
 }) {
   const [showParsed, setShowParsed] = useState(false);
   const parsed = showParsed ? parseIngredients(r.text) : [];
@@ -134,9 +188,14 @@ function RecipeCard({
         spellCheck={false}
         aria-label="Ingredients"
       />
-      <button className="link-btn" onClick={() => setShowParsed((v) => !v)}>
-        {showParsed ? 'Hide' : 'Check'} how it was read
-      </button>
+      <div className="card-links">
+        <button className="link-btn" onClick={() => setShowParsed((v) => !v)}>
+          {showParsed ? 'Hide' : 'Check'} how it was read
+        </button>
+        <button className="link-btn" onClick={onSave} disabled={saved || !r.title.trim() || !r.text.trim()}>
+          {saved ? 'In past recipes' : 'Save to past recipes'}
+        </button>
+      </div>
       {showParsed && (
         <table className="parsed">
           <thead>

@@ -83,6 +83,7 @@ export function singularize(word: string): string {
 
 /** Simple pluralizer for display ("egg" -> "eggs", "tomato" -> "tomatoes"). */
 export function pluralize(word: string): string {
+  if (/(naan|tortilla chips|sushi|tofu|kimchi)$/.test(word)) return word; // same in the plural
   if (/[^aeiou]y$/.test(word)) return word.slice(0, -1) + 'ies';
   if (/(tomato|potato)$/.test(word)) return word + 'es';
   if (/(ch|sh|x|z|s)$/.test(word)) return word + 'es';

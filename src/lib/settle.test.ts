@@ -152,3 +152,35 @@ describe('share state', () => {
     expect(stateFromHash('#nothing')).toBeNull();
   });
 });
+
+describe('not-split items', () => {
+  const item = (by: string, cost: number) => ({ id: `${by}-${cost}`, name: 'rice', cost, by });
+  it('takes the item out of the buyer receipt before splitting', () => {
+    // A paid 60 including 15 of rice for themselves: 45 shared among 3.
+    const b = computeBalances([person('a', 60), person('b', 0), person('c', 0)], [item('a', 15)]);
+    expect(b.map((x) => x.paidCents)).toEqual([4500, 0, 0]);
+    expect(b[0].personalCents).toBe(1500);
+    expect(b.map((x) => x.shareCents)).toEqual([1500, 1500, 1500]);
+    expect(b.map((x) => x.netCents)).toEqual([3000, -1500, -1500]);
+  });
+  it('ignores items with no buyer picked', () => {
+    const b = computeBalances([person('a', 30), person('b', 0)], [item('', 10)]);
+    expect(b.map((x) => x.netCents)).toEqual([1500, -1500]);
+  });
+  it('never makes a shared payment negative', () => {
+    const b = computeBalances([person('a', 5), person('b', 20)], [item('a', 12)]);
+    expect(b[0].paidCents).toBe(0);
+    expect(b[0].personalCents).toBe(500);
+    expect(b.reduce((s, x) => s + x.netCents, 0)).toBe(0);
+  });
+  it('survives the share link', () => {
+    const s = defaultState();
+    s.personal = [{ id: 'x', name: 'basmati rice', cost: 8.5, by: s.people[0].id, key: 'basmati rice' }];
+    expect(decodeState(encodeState(s))!.personal).toEqual(s.personal);
+    expect(decodeState(encodeState({ ...s, personal: undefined as never }))!.personal).toEqual([]);
+  });
+  it('starts with our usual crew and past recipes', () => {
+    expect(defaultState().people.map((p) => `${p.name} @${p.venmo}`)).toEqual(['Allen @allenlovesjesus', 'Justin @suppear', 'Elijah @ejpatts']);
+    expect(defaultState().recipes.map((r) => r.title)).toEqual(['Chicken Alfredo', 'Butter Chicken']);
+  });
+});

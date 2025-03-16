@@ -1,5 +1,7 @@
 import { groceryListText, groupBySection, itemAmountText, type GroceryItem } from '../lib/merge';
 import { copyText } from '../lib/clipboard';
+import type { PersonalItem } from '../lib/settle';
+import { uid } from '../lib/state';
 
 interface Props {
   items: GroceryItem[];
@@ -7,11 +9,33 @@ interface Props {
   headcount: number;
   checked: string[];
   onChecked: (c: string[]) => void;
+  personal: PersonalItem[];
+  defaultBuyer: string;
+  onPersonal: (p: PersonalItem[]) => void;
   onToast: (t: string) => void;
   onNext: () => void;
 }
 
-export function GroceryPanel({ items, dinnerName, headcount, checked, onChecked, onToast, onNext }: Props) {
+export function GroceryPanel({
+  items,
+  dinnerName,
+  headcount,
+  checked,
+  onChecked,
+  personal,
+  defaultBuyer,
+  onPersonal,
+  onToast,
+  onNext,
+}: Props) {
+  const notSplit = new Set(personal.map((p) => p.key).filter(Boolean));
+  const toggleSplit = (item: GroceryItem) => {
+    if (notSplit.has(item.key)) onPersonal(personal.filter((p) => p.key !== item.key));
+    else {
+      onPersonal([...personal, { id: uid(), name: item.name, cost: 0, by: defaultBuyer, key: item.key }]);
+      onToast(`${item.name} won't be split. Add what it cost on the Split tab.`);
+    }
+  };
   const groups = groupBySection(items);
   const checkedSet = new Set(checked);
   const done = items.filter((i) => checkedSet.has(i.key)).length;
@@ -62,8 +86,9 @@ export function GroceryPanel({ items, dinnerName, headcount, checked, onChecked,
           <ul className="items">
             {g.items.map((item) => {
               const isChecked = checkedSet.has(item.key);
+              const solo = notSplit.has(item.key);
               return (
-                <li key={item.key} className={isChecked ? 'done' : ''}>
+                <li key={item.key} className={`${isChecked ? 'done' : ''} ${solo ? 'solo' : ''}`}>
                   <label>
                     <input type="checkbox" checked={isChecked} onChange={() => toggle(item.key)} />
                     <span className="box" aria-hidden="true" />
@@ -72,9 +97,20 @@ export function GroceryPanel({ items, dinnerName, headcount, checked, onChecked,
                       <span className="item-name">{item.name}</span>
                       {item.amounts.length === 0 && <span className="note"> · to taste</span>}
                       {item.amounts.length > 0 && item.alsoToTaste && <span className="note"> · plus extra to taste</span>}
-                      <span className="sources">{item.sources.join(' · ')}</span>
+                      <span className="sources">
+                        {item.sources.join(' · ')}
+                        {solo && <span className="solo-tag"> · not split</span>}
+                      </span>
                     </span>
                   </label>
+                  <button
+                    className={`split-toggle no-print ${solo ? 'on' : ''}`}
+                    onClick={() => toggleSplit(item)}
+                    aria-pressed={solo}
+                    title={solo ? 'Split this with everyone again' : "Buy it, but don't split the cost (e.g. rice you'll keep)"}
+                  >
+                    {solo ? 'not split' : 'split'}
+                  </button>
                 </li>
               );
             })}
@@ -83,7 +119,8 @@ export function GroceryPanel({ items, dinnerName, headcount, checked, onChecked,
       ))}
 
       <p className="hint no-print">
-        Amounts are rounded up to shopper-friendly sizes. Volume and weight are never converted into each other.
+        Amounts are rounded up to shopper-friendly sizes. Tap <strong>split</strong> on anything one person is buying for
+        themselves (rice you'll keep, a big bottle of oil) and it comes out of the split.
       </p>
 
       <div className="row-actions no-print">

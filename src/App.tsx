@@ -137,6 +137,9 @@ export default function App() {
             headcount={state.headcount}
             checked={state.checked}
             onChecked={(checked) => update({ checked })}
+            personal={state.personal}
+            defaultBuyer={state.people[0]?.id ?? ''}
+            onPersonal={(personal) => update({ personal })}
             onToast={setToast}
             onNext={() => setTab('split')}
           />
@@ -144,8 +147,10 @@ export default function App() {
         {tab === 'split' && (
           <SplitPanel
             people={state.people}
+            personal={state.personal}
             dinnerName={state.dinnerName}
-            onChange={(people) => update({ people })}
+            onChange={(people) => update({ people, personal: state.personal.map((it) => (it.by && !people.some((p) => p.id === it.by) ? { ...it, by: '' } : it)) })}
+            onPersonal={(personal) => update({ personal })}
             onToast={setToast}
           />
         )}
